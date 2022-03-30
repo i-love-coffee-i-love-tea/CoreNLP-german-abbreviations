@@ -209,7 +209,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
    *
    * @param words A list of already tokenized words (must implement HasWord or be a String).
    * @return A list of sentences.
-   * @see #WordToSentenceProcessor(String, String, Set, Set, String, NewlineIsSentenceBreak, SequencePattern, Set, boolean, boolean)
+   * @see #WordToSentenceProcessor(String, String, Set, Set, String, NewlineIsSentenceBreak, SequencePattern, Set, Set, boolean, boolean)
    */
   // todo [cdm 2016]: Should really sort out generics here so don't need to have extra list copying
   @Override
@@ -264,7 +264,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
    *
    * @param words A list of already tokenized words (must implement HasWord or be a String).
    * @return A list of sentences.
-   * @see #WordToSentenceProcessor(String, String, Set, Set, String, NewlineIsSentenceBreak, SequencePattern, Set, boolean, boolean)
+   * @see #WordToSentenceProcessor(String, String, Set, Set, String, NewlineIsSentenceBreak, SequencePattern, Set, Set, boolean, boolean)
    */
   @SuppressWarnings("ConstantConditions")
   private List<List<IN>> wordsToSentences(List<? extends IN> words) {
@@ -295,6 +295,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
     boolean lastTokenWasNewline = false;
     boolean lastSentenceEndForced = false;
 
+    String lastword = "";
     for (IN o: words) {
       String word = getString(o);
       boolean forcedEnd = isForcedEndToken(o);
@@ -378,6 +379,8 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
       } else {
         lastTokenWasNewline = false;
         Boolean isb;
+        boolean isAbbreviation = (abbreviations != null && abbreviations.contains(lastword));
+
         if (xmlBreakElementsToDiscard != null && matchesXmlBreakElementToDiscard(word)) {
           newSentForced = true;
           if (DEBUG) { log.info("Word is " + word + "; is XML break element; discarded"); }
@@ -394,7 +397,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
         } else if (sentenceBoundaryTokenPattern.matcher(word).matches()) {
           if ( ! discardToken) { currentSentence.add(o); }
           if (DEBUG) { log.info("Word is " + word + "; is sentence boundary; " + debugText); }
-          newSent = true;
+          if (!isAbbreviation) { newSent = true; }
         } else if (forcedEnd) {
           if ( ! discardToken) { currentSentence.add(o); }
           inWaitForForcedEnd = false;
@@ -425,6 +428,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
         lastSentenceEndForced = true;
         if (DEBUG) { log.info("  lastSentenceEndForced=" + lastSentenceEndForced); }
       }
+      lastword = word;
     }
 
     // add any words at the end, even if there isn't a sentence
@@ -501,8 +505,8 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
    *                          end of sentence and be discarded.
    */
   public WordToSentenceProcessor(Set<String> boundaryToDiscard) {
-    this("", "", boundaryToDiscard, null, null,
-            NewlineIsSentenceBreak.ALWAYS, null, null, false, true);
+    this("", "", boundaryToDiscard, null, null, 
+            NewlineIsSentenceBreak.ALWAYS, null, null, null, false, true);
   }
 
   /**
@@ -516,8 +520,8 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
   public WordToSentenceProcessor(String boundaryTokenRegex,
                                  NewlineIsSentenceBreak newlineIsSentenceBreak,
                                  boolean isOneSentence) {
-    this(boundaryTokenRegex, DEFAULT_BOUNDARY_FOLLOWERS_REGEX, DEFAULT_SENTENCE_BOUNDARIES_TO_DISCARD,
-            null, null, newlineIsSentenceBreak, null, null, isOneSentence, false);
+    this(boundaryTokenRegex, DEFAULT_BOUNDARY_FOLLOWERS_REGEX, DEFAULT_SENTENCE_BOUNDARIES_TO_DISCARD, 
+            null, null, newlineIsSentenceBreak, null, null, null, isOneSentence, false);
   }
 
   /**
@@ -550,12 +554,12 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
                                  Set<String> boundaryToDiscard, Set<String> xmlBreakElementsToDiscard,
                                  NewlineIsSentenceBreak newlineIsSentenceBreak,
                                  SequencePattern<? super IN> sentenceBoundaryMultiTokenPattern,
-                                 Set<String> tokenRegexesToDiscard) {
+                                 Set<String> tokenRegexesToDiscard, Set<String> abbreviations) {
     this(boundaryTokenRegex == null ? DEFAULT_BOUNDARY_REGEX : boundaryTokenRegex,
             boundaryFollowersRegex == null ? DEFAULT_BOUNDARY_FOLLOWERS_REGEX: boundaryFollowersRegex,
             boundaryToDiscard == null || boundaryToDiscard.isEmpty() ? DEFAULT_SENTENCE_BOUNDARIES_TO_DISCARD : boundaryToDiscard,
             xmlBreakElementsToDiscard == null ? Collections.emptySet() : xmlBreakElementsToDiscard,
-            null, newlineIsSentenceBreak, sentenceBoundaryMultiTokenPattern, tokenRegexesToDiscard, false, false);
+            null, newlineIsSentenceBreak, sentenceBoundaryMultiTokenPattern, tokenRegexesToDiscard, abbreviations, false, false);
   }
 
   /**
@@ -595,15 +599,18 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
    *                            Must have substantive value. Often suppressed, but don't want that in things like
    *                            strict one-sentence-per-line mode.
    */
+  private Set<String> abbreviations;
   public WordToSentenceProcessor(String boundaryTokenRegex, String boundaryFollowersRegex,
                                  Set<String> boundariesToDiscard, Set<String> xmlBreakElementsToDiscard,
                                  String regionElementRegex, NewlineIsSentenceBreak newlineIsSentenceBreak,
                                  SequencePattern<? super IN> sentenceBoundaryMultiTokenPattern,
                                  Set<String> tokenRegexesToDiscard,
+                                 Set<String> abbreviations,
                                  boolean isOneSentence, boolean allowEmptySentences) {
     sentenceBoundaryTokenPattern = Pattern.compile(boundaryTokenRegex);
     sentenceBoundaryFollowersPattern = Pattern.compile(boundaryFollowersRegex);
     sentenceBoundaryToDiscard = Collections.unmodifiableSet(boundariesToDiscard);
+    this.abbreviations = abbreviations;
     if (xmlBreakElementsToDiscard == null || xmlBreakElementsToDiscard.isEmpty()) {
       this.xmlBreakElementsToDiscard = null;
     } else {

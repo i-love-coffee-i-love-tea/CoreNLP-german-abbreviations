@@ -101,6 +101,13 @@ public class WordsToSentencesAnnotator implements Annotator  {
           String[] elements = bounds.split(",");
           htmlElementsToDiscard = Generics.newHashSet(Arrays.asList(elements));
         }
+
+        Set<String> abbreviations = null;
+        String cfgAbbreviations = properties.getProperty("ssplit.abbreviations");
+        if (cfgAbbreviations != null) {
+          String[] elements = cfgAbbreviations.split(",");
+          abbreviations = Generics.newHashSet(Arrays.asList(elements));
+        }
         String nlsb = properties.getProperty(StanfordCoreNLP.NEWLINE_IS_SENTENCE_BREAK_PROPERTY,
             StanfordCoreNLP.DEFAULT_NEWLINE_IS_SENTENCE_BREAK);
 
@@ -108,7 +115,7 @@ public class WordsToSentencesAnnotator implements Annotator  {
         this.wts = new WordToSentenceProcessor<>(boundaryTokenRegex, boundaryFollowersRegex,
             boundariesToDiscard, htmlElementsToDiscard,
             WordToSentenceProcessor.stringToNewlineIsSentenceBreak(nlsb),
-            (boundaryMultiTokenRegex != null) ? TokenSequencePattern.compile(boundaryMultiTokenRegex) : null, tokenRegexesToDiscard);
+            (boundaryMultiTokenRegex != null) ? TokenSequencePattern.compile(boundaryMultiTokenRegex) : null, tokenRegexesToDiscard, abbreviations);
       }
     }
     VERBOSE = Boolean.parseBoolean(properties.getProperty("ssplit.verbose", "false"));
@@ -126,7 +133,7 @@ public class WordsToSentencesAnnotator implements Annotator  {
             new WordToSentenceProcessor<>(boundaryTokenRegex, null,
                     boundaryToDiscard, htmlElementsToDiscard,
                     WordToSentenceProcessor.stringToNewlineIsSentenceBreak(newlineIsSentenceBreak),
-                    (boundaryMultiTokenRegex != null) ? TokenSequencePattern.compile(boundaryMultiTokenRegex) : null, tokenRegexesToDiscard));
+                    (boundaryMultiTokenRegex != null) ? TokenSequencePattern.compile(boundaryMultiTokenRegex) : null, tokenRegexesToDiscard, null));
   }
 
   private WordsToSentencesAnnotator(boolean verbose, boolean countLineNumbers,

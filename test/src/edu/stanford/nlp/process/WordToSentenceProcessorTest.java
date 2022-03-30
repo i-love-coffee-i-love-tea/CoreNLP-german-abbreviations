@@ -153,7 +153,7 @@ public class WordToSentenceProcessorTest extends TestCase {
     final WordToSentenceProcessor<CoreLabel> wtsXml =
             new WordToSentenceProcessor<>(null, null,null,
                         Generics.newHashSet(Arrays.asList("p", "chapter")),
-                        WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER, null, null);
+                        WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER, null, null, null);
 
     String input1 = "<chapter>Chapter 1</chapter><p>This is text. So is this.</p> <p>One without end</p><p>Another</p><p>And another</p>";
     checkResult(wtsXml, input1,
@@ -171,7 +171,7 @@ public class WordToSentenceProcessorTest extends TestCase {
                     WordToSentenceProcessor.DEFAULT_BOUNDARY_FOLLOWERS_REGEX,
                     WordToSentenceProcessor.DEFAULT_SENTENCE_BOUNDARIES_TO_DISCARD,
                     Generics.newHashSet(Collections.singletonList("p")),
-                    "chapter|preface", WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER, null, null, false, false);
+                    "chapter|preface", WordToSentenceProcessor.NewlineIsSentenceBreak.NEVER, null, null, null, false, false);
     String input1 = "<title>Chris rules!</title><preface><p>Para one</p><p>Para two</p></preface>" +
             "<chapter><p>Text we like. Two sentences \n\n in it.</p></chapter><coda>Some more text here</coda>";
     checkResult(wtsRegion, input1,
