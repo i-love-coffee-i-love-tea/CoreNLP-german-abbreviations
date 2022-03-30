@@ -136,6 +136,9 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
   /** Whether to output empty sentences. */
   private final boolean allowEmptySentences;
 
+  private Set<String> abbreviations;
+  private Set<String> months = new HashSet<String>();
+
   public static NewlineIsSentenceBreak stringToNewlineIsSentenceBreak(String name) {
     if ("always".equals(name)) {
       return NewlineIsSentenceBreak.ALWAYS;
@@ -296,16 +299,23 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
     boolean lastSentenceEndForced = false;
 
     String lastword = "";
-    for (IN o: words) {
-      String word = getString(o);
-      boolean forcedEnd = isForcedEndToken(o);
+    String nextword = "";
+    for (int i = 0; i < words.size(); i++) {
+      if (i > 0) {
+        lastword = getString(words.get(i-1));
+      }
+      if (i < words.size() -1) {
+        nextword = getString(words.get(i+1));
+      }
+      String word = getString(words.get(i));
+      boolean forcedEnd = isForcedEndToken(words.get(i));
       // if (DEBUG) { if (forcedEnd) { log.info("Word is " + word + "; marks forced end of sentence [cont.]"); } }
 
       boolean inMultiTokenExpr = false;
       boolean discardToken = false;
-      if (o instanceof CoreMap) {
+      if (words.get(i) instanceof CoreMap) {
         // Hacky stuff to ensure sentence breaks do not happen in certain cases
-        CoreMap cm = (CoreMap) o;
+        CoreMap cm = (CoreMap) words.get(i);
         if ( ! forcedEnd) {
           Boolean forcedUntilEndValue = cm.get(CoreAnnotations.ForcedSentenceUntilEndAnnotation.class);
           if (forcedUntilEndValue != null && forcedUntilEndValue) {
@@ -340,7 +350,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
               ! lastTokenWasNewline && sentenceBoundaryFollowersPattern.matcher(word).matches() &&
               plausibleToAdd(lastSentence, word)) {
         if ( ! discardToken) {
-          lastSentence.add(o);
+          lastSentence.add(words.get(i));
         }
         if (DEBUG) {
           log.info("Word is " + word + (discardToken ? "discarded":"  added to last sentence"));
@@ -357,10 +367,10 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
           // there can be newlines even in something to keep together
           discardToken = true;
         }
-        if ( ! discardToken) currentSentence.add(o);
+        if ( ! discardToken) currentSentence.add(words.get(i));
         if (DEBUG) { log.info("Word is " + word + "; in wait for forced end; " + debugText); }
       } else if (inMultiTokenExpr && ! forcedEnd) {
-        if ( ! discardToken) currentSentence.add(o);
+        if ( ! discardToken) currentSentence.add(words.get(i));
         if (DEBUG) { log.info("Word is " + word + "; in multi token expr; " + debugText); }
       } else if (sentenceBoundaryToDiscard.contains(word)) {
         if (forcedEnd) {
@@ -380,6 +390,7 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
         lastTokenWasNewline = false;
         Boolean isb;
         boolean isAbbreviation = (abbreviations != null && abbreviations.contains(lastword));
+        boolean isDate = (months != null && months.contains(nextword));
 
         if (xmlBreakElementsToDiscard != null && matchesXmlBreakElementToDiscard(word)) {
           newSentForced = true;
@@ -388,23 +399,24 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
           insideRegion = false;
           newSentForced = true;
           // Marked sentence boundaries
-        } else if ((isSentenceBoundary != null) && ((isb = isSentenceBoundary.get(o)) != null) && isb) {
-          if (!discardToken) currentSentence.add(o);
+        } else if ((isSentenceBoundary != null) && ((isb = isSentenceBoundary.get(words.get(i))) != null) && isb) {
+          if (!discardToken) currentSentence.add(words.get(i));
           if (DEBUG) {
             log.info("Word is " + word + "; is sentence boundary (matched multi-token pattern); " + debugText);
           }
           newSent = true;
         } else if (sentenceBoundaryTokenPattern.matcher(word).matches()) {
-          if ( ! discardToken) { currentSentence.add(o); }
+          if ( ! discardToken) { currentSentence.add(words.get(i)); }
           if (DEBUG) { log.info("Word is " + word + "; is sentence boundary; " + debugText); }
-          if (!isAbbreviation) { newSent = true; }
+          if ( ! isAbbreviation && ! isDate) { newSent = true; }
+
         } else if (forcedEnd) {
-          if ( ! discardToken) { currentSentence.add(o); }
+          if ( ! discardToken) { currentSentence.add(words.get(i)); }
           inWaitForForcedEnd = false;
           newSentForced = true;
           if (DEBUG) { log.info("Word is " + word + "; annotated to be the end of a sentence; " + debugText); }
         } else {
-          if ( ! discardToken) currentSentence.add(o);
+          if ( ! discardToken) currentSentence.add(words.get(i));
           // chris added this next test in 2017; a bit weird, but KBP setup doesn't have newline in sentenceBoundary patterns, just in toDiscard
           if (AbstractTokenizer.NEWLINE_TOKEN.equals(word)) {
             lastTokenWasNewline = true;
@@ -599,7 +611,6 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
    *                            Must have substantive value. Often suppressed, but don't want that in things like
    *                            strict one-sentence-per-line mode.
    */
-  private Set<String> abbreviations;
   public WordToSentenceProcessor(String boundaryTokenRegex, String boundaryFollowersRegex,
                                  Set<String> boundariesToDiscard, Set<String> xmlBreakElementsToDiscard,
                                  String regionElementRegex, NewlineIsSentenceBreak newlineIsSentenceBreak,
@@ -607,6 +618,20 @@ public class WordToSentenceProcessor<IN> implements ListProcessor<IN, List<IN>> 
                                  Set<String> tokenRegexesToDiscard,
                                  Set<String> abbreviations,
                                  boolean isOneSentence, boolean allowEmptySentences) {
+    months = new HashSet<String>();
+    months.add("Januar");
+    months.add("Februar");
+    months.add("März");
+    months.add("April");
+    months.add("Mai");
+    months.add("Juni");
+    months.add("Juli");
+    months.add("August");
+    months.add("September");
+    months.add("Oktober");
+    months.add("November");
+    months.add("Dezember");
+    months = Collections.unmodifiableSet(months);
     sentenceBoundaryTokenPattern = Pattern.compile(boundaryTokenRegex);
     sentenceBoundaryFollowersPattern = Pattern.compile(boundaryFollowersRegex);
     sentenceBoundaryToDiscard = Collections.unmodifiableSet(boundariesToDiscard);
